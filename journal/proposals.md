@@ -4340,3 +4340,27 @@ There are no new hourly proposals since DEEP-10-10.
 - **P7, subclass auto-tagger, P1, P2, P3(a): Status: unchanged (PROPOSED).** The Andersson
   `e746d7e1ba99` void-branch issue is still open.
 - There were no new hourly proposals in this window.
+
+## 2026-10-20 06:26Z - operator machine is geo-blocked from gamma-api (HTTP 451)
+
+- **P9 (operator, environment / core/scan.py + core/resolve.py + core/ledger.py): this
+  operator machine cannot reach Polymarket's gamma API. Status: PROPOSED, HIGH.**
+  - Evidence: this was the first FULL tick on the operator machine after the b5f0196d
+    fresh-ledger reset (06:26Z). All six discovery queries (liquid-multiday, by-liquidity,
+    active-today, econ-tag, mentions-tag, commodities-tag) failed after 3 tries with
+    `HTTP Error 451: Unavailable For Legal Reasons` from
+    `gamma-api.polymarket.com/markets`. The scan returned 0 candidates, and
+    `screen.py prepare` reported "no valid candidates on input".
+  - The same queries returned 1,192 to 1,295 candidates on cloud FULLs (10-10 16:19Z, 10-16
+    06:45Z). So the block depends on where the request comes from (this machine's IP or
+    region). It is not a discovery-module bug, and I will not change queries to work around it.
+  - Impact: every FULL tick on this machine places nothing. Worse, once positions exist,
+    `resolve.py` (gamma lookups) and `ledger.py place` (CLOB asks) will probably fail here
+    too, so LIGHT ticks on this machine could not settle or monitor. The `--real` path needs
+    Polymarket access from this host as well, so it is likely affected.
+  - Options: (a) route the operator machine's Polymarket HTTP through an allowed egress
+    (only if that is lawful for the operator's jurisdiction; this is the operator's call,
+    not mine); (b) have loop.sh run operator-machine ticks as settle-free LIGHT, or not run
+    them at all, and leave FULLs to the cloud runner; (c) have scan.py report a 451 as a
+    distinct "geo-blocked" fallback state, so the cycle can say so instead of showing an
+    empty pool.
